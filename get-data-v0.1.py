@@ -37,7 +37,7 @@ def read_pmcids(csv_path):
 def get_ftp_path_from_oa(pmcid):
     url = f"https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id={pmcid}"
     throttle_request()
-    resp = requests.get(url)
+    resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     root = ET.fromstring(resp.text)
     error_elem = root.find("error")
@@ -47,12 +47,6 @@ def get_ftp_path_from_oa(pmcid):
         if link.attrib.get("format") == "tgz" and link.attrib.get("href", "").startswith("ftp://"):
             return "/".join(link.attrib["href"].split("/pub/pmc/")[1:])
     return None
-
-def connect_ftp():
-    ftp = ftplib.FTP(FTP_HOST, timeout=30)
-    ftp.login()
-    ftp.cwd('/pub/pmc')
-    return ftp
 
 def files_to_extract(tar, pmcid, only_xml):
     for member in tar.getmembers():
@@ -73,24 +67,25 @@ def download_and_extract(pmcid, archive_path, output_dir, only_xml, ignore_error
         return
     os.makedirs(pmc_folder, exist_ok=True)
 
-    for attempt in range(1, 5):
+    for attempt in range(1, 6):
         try:
-            ftp = connect_ftp()
-            with io.BytesIO() as buf:
-                print(f"Downloading {archive_path} (attempt {attempt})...")
-                throttle_request()
-                ftp.retrbinary(f"RETR {archive_path}", buf.write)
-                ftp.quit()
-                buf.seek(0)
-                with tarfile.open(fileobj=buf, mode="r:gz") as tar:
-                    tar.extractall(path=output_dir, members=files_to_extract(tar, pmcid, only_xml))
+            with ftplib.FTP(FTP_HOST, timeout=60) as ftp:
+                ftp.login()
+                ftp.cwd('/pub/pmc')
+                with io.BytesIO() as buf:
+                    print(f"Downloading {archive_path} (attempt {attempt})...")
+                    throttle_request()
+                    ftp.retrbinary(f"RETR {archive_path}", buf.write)
+                    buf.seek(0)
+                    with tarfile.open(fileobj=buf, mode="r:gz") as tar:
+                        tar.extractall(path=output_dir, members=files_to_extract(tar, pmcid, only_xml))
             print(f"Extracted to {pmc_folder}")
             return
         except Exception as e:
             print(f"Error downloading {pmcid}: {e}")
-            if attempt == 4 and not ignore_errors:
+            if attempt == 5 and not ignore_errors:
                 sys.exit(1)
-            time.sleep(2)
+            time.sleep(3)
 
 def main():
     args = parse_args()
