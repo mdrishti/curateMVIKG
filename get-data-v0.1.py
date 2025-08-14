@@ -40,6 +40,9 @@ def get_ftp_path_from_oa(pmcid):
     resp = requests.get(url)
     resp.raise_for_status()
     root = ET.fromstring(resp.text)
+    error_elem = root.find("error")
+    if error_elem is not None:
+        return f"ERROR: {error_elem.attrib.get('code', '')} - {error_elem.text.strip()}"
     for link in root.findall(".//link"):
         if link.attrib.get("format") == "tgz" and link.attrib.get("href", "").startswith("ftp://"):
             return "/".join(link.attrib["href"].split("/pub/pmc/")[1:])
@@ -61,6 +64,9 @@ def files_to_extract(tar, pmcid, only_xml):
         yield member
 
 def download_and_extract(pmcid, archive_path, output_dir, only_xml, ignore_errors):
+    if archive_path.startswith("ERROR:"):
+        print(f"{pmcid}: {archive_path}")
+        return
     pmc_folder = os.path.join(output_dir, pmcid)
     if os.path.exists(pmc_folder):
         print(f"Skipping {pmcid}, already exists")
