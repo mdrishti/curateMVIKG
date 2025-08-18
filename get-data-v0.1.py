@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional, List
 from io import BytesIO
 
-REQUEST_DELAY = 0.34  # ~3 requests/sec
+REQUEST_DELAY = 0.51  # ~3 requests/sec
 _last_request_time = 0.0
 USER_AGENT = {"User-Agent": "pmc-downloader/1.0 (+https://example.org)"}
 
@@ -22,9 +22,10 @@ def throttle_request() -> None:
     _last_request_time = time.time()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Download PMC ZIP archives via Europe PMC supplementary files API using PMCIDs from CSV.")
+    parser = argparse.ArgumentParser(description="Download PMC ZIP archives Download PMC OA archives via NCBI FTP or via Europe PMC supplementary files API, using PMCIDs from CSV.")
     parser.add_argument("-i", "--input", required=True, help="Path to CSV file with PMCID column")
     parser.add_argument("-o", "--output", required=True, help="Directory to save extracted files")
+    parser.add_argument("--choice", required=True, type=int, default=1, help="Choose whether API of PMC (1) or EuropePMC (2) should be used")
     parser.add_argument("--only-xml", action="store_true", help="Extract only .nxml files")
     parser.add_argument("--ignore-errors", action="store_true", help="Continue on errors")
     return parser.parse_args()
@@ -141,69 +142,77 @@ def download_from_europepmc(pmcid: str, output_dir: str, only_xml: bool, ignore_
             except Exception:
                 pass
 
-# ----------------------------
-# (Commented) NCBI OA CGI fallback code kept verbatim for future use
-# ----------------------------
-# import ftplib
-# FTP_HOST = 'ftp.ncbi.nlm.nih.gov'
-# def get_ftp_path_from_ncbi(pmcid):
-#     url = f"https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id={pmcid}"
-#     throttle_request()
-#     resp = requests.get(url, timeout=30)
-#     resp.raise_for_status()
-#     root = ET.fromstring(resp.content)
-#     error_elem = root.find("error")
-#     if error_elem is not None:
-#         print(f"{pmcid}: {error_elem.get('code', '')} - {error_elem.text.strip()}")
-#         return None
-#     for link in root.findall(".//link"):
-#         href = link.attrib.get("href", "")
-#         if link.attrib.get("format") == "tgz" and href.endswith(".tar.gz"):
-#             return "/".join(href.split("/pub/pmc/")[1:])
-#     return None
+#----------------------------
+#(Commented) NCBI OA CGI fallback code kept verbatim for future use
+#----------------------------
+import ftplib
+FTP_HOST = 'ftp.ncbi.nlm.nih.gov'
+def get_ftp_path_from_oa(pmcid):
+    url = f"https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi?id={pmcid}"
+    throttle_request()
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    root = ET.fromstring(resp.content)
+    error_elem = root.find("error")
+    if error_elem is not None:
+        print(f"{pmcid}: {error_elem.get('code', '')} - {error_elem.text.strip()}")
+        return None
+    for link in root.findall(".//link"):
+        href = link.attrib.get("href", "")
+        if link.attrib.get("format") == "tgz" and href.endswith(".tar.gz"):
+            return "/".join(href.split("/pub/pmc/")[1:])
+    return None
 #
-# def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_errors):
-#     import io as _io
-#     import ftplib as _ftplib
-#     pmc_folder = os.path.join(output_dir, pmcid)
-#     if os.path.exists(pmc_folder):
-#         print(f"Skipping {pmcid}, already exists")
-#         return
-#     os.makedirs(pmc_folder, exist_ok=True)
-#     for attempt in range(1, 6):
-#         try:
-#             with _ftplib.FTP(FTP_HOST, timeout=60) as ftp:
-#                 ftp.login()
-#                 ftp.cwd('/pub/pmc')
-#                 with _io.BytesIO() as buf:
-#                     print(f"Downloading {archive_path} (attempt {attempt})...")
-#                     throttle_request()
-#                     ftp.retrbinary(f"RETR {archive_path}", buf.write)
-#                     buf.seek(0)
-#                     with tarfile.open(fileobj=buf, mode="r:gz") as tar:
-#                         members = []
-#                         for m in tar.getmembers():
-#                             if only_xml and not m.name.lower().endswith('.nxml'):
-#                                 continue
-#                             parts = m.name.split('/')
-#                             parts[0] = pmcid
-#                             m.name = '/'.join(parts)
-#                             members.append(m)
-#                         _safe_extract_tar(tar, output_dir, members)
-#             print(f"Extracted to {pmc_folder}")
-#             return
-#         except Exception as e:
-#             print(f"Error downloading {pmcid}: {e}")
-#             if attempt == 5 and not ignore_errors:
-#                 return
-#             time.sleep(3)
+def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_errors):
+    import io as _io
+    import ftplib as _ftplib
+    pmc_folder = os.path.join(output_dir, pmcid)
+    if os.path.exists(pmc_folder):
+        print(f"Skipping {pmcid}, already exists")
+        return
+    os.makedirs(pmc_folder, exist_ok=True)
+    for attempt in range(1, 6):
+        try:
+            with _ftplib.FTP(FTP_HOST, timeout=60) as ftp:
+                ftp.login()
+                ftp.cwd('/pub/pmc')
+                with _io.BytesIO() as buf:
+                    print(f"Downloading {archive_path} (attempt {attempt})...")
+                    throttle_request()
+                    ftp.retrbinary(f"RETR {archive_path}", buf.write)
+                    buf.seek(0)
+                    with tarfile.open(fileobj=buf, mode="r:gz") as tar:
+                        members = []
+                        for m in tar.getmembers():
+                            if only_xml and not m.name.lower().endswith('.nxml'):
+                                continue
+                            parts = m.name.split('/')
+                            parts[0] = pmcid
+                            m.name = '/'.join(parts)
+                            members.append(m)
+                        _safe_extract_tar(tar, output_dir, members)
+            print(f"Extracted to {pmc_folder}")
+            return
+        except Exception as e:
+            print(f"Error downloading {pmcid}: {e}")
+            if attempt == 5 and not ignore_errors:
+                return
+            time.sleep(10)
 
 def main():
     args = parse_args()
     pmcids = read_pmcids(args.input)
     os.makedirs(args.output, exist_ok=True)
-    for pmcid in pmcids:
-        download_from_europepmc(pmcid, args.output, args.only_xml, args.ignore_errors)
+    if args.choice == 2:
+        for pmcid in pmcids:
+            download_from_europepmc(pmcid, args.output, args.only_xml, args.ignore_errors)
+    else:
+        for pmcid in pmcids:
+            archive_path = get_ftp_path_from_oa(pmcid)
+            if not archive_path:
+                print(f"No archive found for {pmcid}, skipping")
+                continue
+            download_and_extract_ftp(pmcid, archive_path, args.output, args.only_xml, args.ignore_errors)
 
 if __name__ == "__main__":
     main()
