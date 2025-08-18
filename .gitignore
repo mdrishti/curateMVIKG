@@ -216,6 +216,9 @@ tsv*
 # Logs
 log*
 
+# Backup
+backup
+
 # Output
 out*
 [a-z].txt
