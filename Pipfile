@@ -4,8 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-requests = ">=2.31.0"
-pipfile = "*"
+transformers = "==4.41.1"
+torch = ">=2.0.0"
+pymupdf = "==1.23.7"
+python-docx = "==1.1.0"
+pandas = "==2.2.2"
+requests = "==2.32.3"
+beautifulsoup4 = "==4.12.3"
+openpyxl = "==3.1.2"
+docx = "*"
 
 [dev-packages]
 
