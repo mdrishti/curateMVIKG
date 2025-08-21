@@ -7,12 +7,15 @@ import json
 import re
 from pathlib import Path
 from openpyxl import load_workbook
+import xlrd
+import pyexcel
 
 
 def prettify_xml(elem):
     rough_string = ET.tostring(elem, 'utf-8')
     reparsed = minidom.parseString(rough_string)
     return reparsed.toprettyxml(indent="  ")
+
 
 
 def reconstruct_table_from_ocr(ocr_data, y_threshold=15):
@@ -65,32 +68,6 @@ def reconstruct_table_from_ocr(ocr_data, y_threshold=15):
         return pd.DataFrame()
 
 
-def get_bold_rows_from_excel(file_path, sheet_name, max_rows=3):
-    wb = load_workbook(file_path, data_only=True)
-    ws = wb[sheet_name]
-
-    all_bold_rows = []
-    last_bold_headers = None
-
-    for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=max_rows), start=1):
-        bold_row = []
-        has_bold = False
-        for cell in row:
-            if cell.value is not None:
-                if hasattr(cell.font, "bold") and cell.font.bold:
-                    bold_row.append(str(cell.value).strip())
-                    has_bold = True
-                else:
-                    bold_row.append(None)
-            else:
-                bold_row.append(None)
-        if has_bold:
-            all_bold_rows.append((row_idx, bold_row))
-            last_bold_headers = bold_row
-    print(all_bold_rows)
-    print(last_bold_headers)
-    return last_bold_headers, all_bold_rows
-
 
 def convert_to_xml(df, root_name, row_name, sheet_name=None, metadata_rows=None):
     if df.empty:
@@ -126,38 +103,81 @@ def convert_to_xml(df, root_name, row_name, sheet_name=None, metadata_rows=None)
 
     return root
 
+from collections import OrderedDict
 
-def convert_data_to_xml_seamless(data, input_type):
+def search_records(records, phrase):
+    phrase = phrase.lower()
+    results = []
+    for record in records:
+        for v in record.values():
+            if phrase in str(v).lower():
+                results.append(record)
+                break  # stop once we found a match in this record
+    return results
+
+import pandas as pd
+import pyexcel
+import json
+import xml.etree.ElementTree as ET
+
+
+def convert_data_to_xml_seamless(data, input_type, search_phrase=None):
+    print(data)
+
     dfs = {}
-
+    
     try:
         if input_type == 'tsv':
-            dfs['mutations'] = (pd.read_csv(data, sep='\t'), None)
+            df = pd.read_csv(data, sep='\t')
+            if search_phrase:
+                phrase = search_phrase.lower()
+                df = df[df.apply(lambda row: row.astype(str).str.lower().str.contains(phrase).any(), axis=1)]
+                if df.empty:
+                    return f"No matches found for '{search_phrase}'."
+                return df.to_dict(orient='records')
+            dfs['mutations'] = df
+
         elif input_type == 'excel':
-            xls = pd.ExcelFile(data)
-            for sheet_name in xls.sheet_names:
-                last_bold_headers, all_bold_rows = get_bold_rows_from_excel(data, sheet_name)
-                df = pd.read_excel(xls, sheet_name=sheet_name)
+            wb = pyexcel.get_book(file_name=data)
+            sheetNames = wb.sheet_names()
+            print(sheetNames)
 
-                if last_bold_headers:
-                    new_cols = []
-                    for col_idx, col_name in enumerate(df.columns):
-                        if ("Unnamed" in str(col_name)) and last_bold_headers[col_idx]:
-                            new_cols.append(last_bold_headers[col_idx])
-                        else:
-                            new_cols.append(col_name)
-                    df.columns = new_cols
+            for sheet_name in sheetNames:
+                print(sheet_name)
+                records = pyexcel.get_records(file_name=data, sheet_name=sheet_name)
 
-                dfs[sheet_name] = (df, all_bold_rows)
+                if search_phrase:
+                    phrase = search_phrase.lower()
+                    matches = [row for row in records if any(phrase in str(v).lower() for v in row.values())]
+                    if matches:
+                        dfs[sheet_name] = matches
+                else:
+                    dfs[sheet_name] = records
+
+            if search_phrase:
+                if not dfs:
+                    return f"No matches found for '{search_phrase}'."
+                return dfs  # return matches directly instead of XML
 
         elif input_type == 'ocr':
             with open(data, 'r') as f:
                 ocr_dict = json.load(f)
             df_reconstructed = reconstruct_table_from_ocr(ocr_dict)
+
             if not df_reconstructed.empty:
-                dfs['ocr_table'] = (df_reconstructed, None)
+                if search_phrase:
+                    phrase = search_phrase.lower()
+                    df_reconstructed = df_reconstructed[df_reconstructed.apply(
+                        lambda row: row.astype(str).str.lower().str.contains(phrase).any(), axis=1
+                    )]
+                    if df_reconstructed.empty:
+                        return f"No matches found for '{search_phrase}'."
+                    return df_reconstructed.to_dict(orient='records')
+                dfs['ocr_table'] = df_reconstructed
+
         else:
-            return f"Error: Unsupported input type '{input_type}'. Please use 'tsv', 'excel', or 'ocr'."
+            return f"Error: Unsupported input type '{input_type}'."
+
     except FileNotFoundError:
         return f"Error: The file '{data}' was not found."
     except Exception as e:
@@ -166,10 +186,26 @@ def convert_data_to_xml_seamless(data, input_type):
     if not dfs:
         return "Error: No data was successfully processed."
 
+    # only if no search phrase, we go into XML conversion
     root_element = ET.Element('bacterial_mutations_data')
-    for sheet_name, (df, metadata_rows) in dfs.items():
+    for sheet_name, df_data in dfs.items():
+        if isinstance(df_data, tuple):
+            df, metadata_rows = df_data
+        else:
+            df, metadata_rows = df_data, None
+
+        # Convert records (list of dicts) into DataFrame for XML converter
+        if isinstance(df, list):
+            df = pd.DataFrame(df)
+
         if not df.empty:
-            xml_element = convert_to_xml(df, 'bacterial_mutations_data', 'mutation_entry', sheet_name=sheet_name, metadata_rows=metadata_rows)
+            xml_element = convert_to_xml(
+                df,
+                'bacterial_mutations_data',
+                'mutation_entry',
+                sheet_name=sheet_name,
+                metadata_rows=metadata_rows[:-1] if metadata_rows else None
+            )
             if xml_element:
                 for child in list(xml_element):
                     root_element.append(child)
@@ -177,12 +213,18 @@ def convert_data_to_xml_seamless(data, input_type):
     return prettify_xml(root_element)
 
 
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert tabular data from various formats to XML.")
     parser.add_argument('-f', '--file', required=True, help="Path to the input file (e.g., .tsv, .xlsx, or .json for OCR data).")
     parser.add_argument('-t', '--type', choices=['tsv', 'excel', 'ocr'], required=True, help="Format of the input data.")
-
+    parser.add_argument(
+        '-s', '--search', required=False,
+        help="Optional phrase to search for in the data. If set, XML is not generated."
+    )
     args = parser.parse_args()
-    xml_output = convert_data_to_xml_seamless(args.file, args.type)
-    #print(xml_output)
+    print(args.search)
+    xml_output = convert_data_to_xml_seamless(args.file, args.type, search_phrase=args.search)
+    print(xml_output)
 
