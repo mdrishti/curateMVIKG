@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional, List
 from io import BytesIO
 
-REQUEST_DELAY = 0.51  # ~3 requests/sec
+REQUEST_DELAY = 0.34  # ~3 requests/sec
 _last_request_time = 0.0
 USER_AGENT = {"User-Agent": "pmc-downloader/1.0 (+https://example.org)"}
 
