@@ -13,6 +13,7 @@ REQUEST_DELAY = 0.34  # ~3 requests/sec
 _last_request_time = 0.0
 USER_AGENT = {"User-Agent": "pmc-downloader/1.0 (+https://example.org)"}
 
+## delay in requests
 def throttle_request() -> None:
     global _last_request_time
     now = time.time()
@@ -21,6 +22,8 @@ def throttle_request() -> None:
         time.sleep(REQUEST_DELAY - elapsed)
     _last_request_time = time.time()
 
+
+## argument parser
 def parse_args():
     parser = argparse.ArgumentParser(description="Download PMC ZIP archives Download PMC OA archives via NCBI FTP or via Europe PMC supplementary files API, using PMCIDs from CSV.")
     parser.add_argument("-i", "--input", required=True, help="Path to CSV file with PMCID column")
@@ -30,6 +33,8 @@ def parse_args():
     parser.add_argument("--ignore-errors", action="store_true", help="Continue on errors")
     return parser.parse_args()
 
+
+###################### rest of the workflow for NCBI or EuropePMC API ################################
 def read_pmcids(csv_path: str) -> List[str]:
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
