@@ -1,0 +1,5 @@
+1. In case the OA web service API is not active, one can use th efile list available from the ftp site of NCBI to retrieve the address of the file, as follows: 
+
+awk -F "\t" 'NR==FNR{a[$3]=$1} NR>FNR{if($1 in a) {print $0"\t"a[$1]}}' ../../data_from_PMC/oa_file_list.txt csv-Bacteroid_BetaSearch_20250821_PMC_list.csv
+
+
