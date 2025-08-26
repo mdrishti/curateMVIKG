@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+from collections import OrderedDict
 import argparse
 import json
 import re
@@ -9,6 +10,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 import xlrd
 import pyexcel
+import pandas as pd
 
 
 def prettify_xml(elem):
@@ -103,7 +105,7 @@ def convert_to_xml(df, root_name, row_name, sheet_name=None, metadata_rows=None)
 
     return root
 
-from collections import OrderedDict
+
 
 def search_records(records, phrase):
     phrase = phrase.lower()
@@ -115,14 +117,11 @@ def search_records(records, phrase):
                 break  # stop once we found a match in this record
     return results
 
-import pandas as pd
-import pyexcel
-import json
-import xml.etree.ElementTree as ET
+
 
 
 def convert_data_to_xml_seamless(data, input_type, search_phrase=None):
-    print(data)
+    #print(data)
 
     dfs = {}
     
@@ -140,23 +139,35 @@ def convert_data_to_xml_seamless(data, input_type, search_phrase=None):
         elif input_type == 'excel':
             wb = pyexcel.get_book(file_name=data)
             sheetNames = wb.sheet_names()
-            print(sheetNames)
+            #print(sheetNames)
 
             for sheet_name in sheetNames:
-                print(sheet_name)
+                #print(sheet_name)
                 records = pyexcel.get_records(file_name=data, sheet_name=sheet_name)
-
-                if search_phrase:
-                    phrase = search_phrase.lower()
-                    matches = [row for row in records if any(phrase in str(v).lower() for v in row.values())]
-                    if matches:
-                        dfs[sheet_name] = matches
-                else:
-                    dfs[sheet_name] = records
-
+ #               if search_phrase:
+ #                   phrase = search_phrase.lower()
+                if search_phrase:  # normalize: allow a single string OR a list of phrases
+                    phrases = ([search_phrase.lower()] if isinstance(search_phrase, str) else [p.lower() for p in search_phrase])
+                matches = [
+                    row for row in records
+                    if any(
+                        phrase in str(v).lower()
+                        for phrase in phrases
+                        for v in row.values()
+                    )
+                ]
+                #matches = [row for row in records if any(phrase in str(v).lower() for v in row.values())]
+                if len(matches) >= 1:
+                    print(matches)
+                    dfs[sheet_name] = matches
+                #else:
+                #    dfs[sheet_name] = records
             if search_phrase:
+                #print(search_phrase)
                 if not dfs:
                     return f"No matches found for '{search_phrase}'."
+                else:
+                    print(f"matches found for '{search_phrase}' in {dfs}")
                 return dfs  # return matches directly instead of XML
 
         elif input_type == 'ocr':
@@ -220,11 +231,10 @@ if __name__ == "__main__":
     parser.add_argument('-f', '--file', required=True, help="Path to the input file (e.g., .tsv, .xlsx, or .json for OCR data).")
     parser.add_argument('-t', '--type', choices=['tsv', 'excel', 'ocr'], required=True, help="Format of the input data.")
     parser.add_argument(
-        '-s', '--search', required=False,
+        '-s', '--search', required=False, nargs="+",
         help="Optional phrase to search for in the data. If set, XML is not generated."
     )
     args = parser.parse_args()
-    print(args.search)
-    xml_output = convert_data_to_xml_seamless(args.file, args.type, search_phrase=args.search)
-    print(xml_output)
+    outputAnyKind = convert_data_to_xml_seamless(args.file, args.type, search_phrase=args.search)
+    print(outputAnyKind)
 
