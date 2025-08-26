@@ -246,10 +246,8 @@ def _safe_extract_tar(tar, output_dir, members=None):
 
 
 def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_errors):
-    import io as _io
-    import tarfile
     global pmc
-    print(pmcid)
+    #print(pmcid)
     '''
     pmc_folder = os.path.join(output_dir, pmcid)
     if os.path.exists(pmc_folder):
@@ -258,12 +256,14 @@ def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_e
     os.makedirs(pmc_folder, exist_ok=True)
     '''
     targz_path = os.path.join(output_dir, '{0}.tar.gz'.format(pmcid))
-    print(archive_path)
+    if os.path.exists(targz_path):
+        print(f"Skipping {pmcid}, already exists")
+        return
+    #print(archive_path)
     for attempt in range(1, 6):
             try:
                 print(f"Downloading {archive_path} (attempt {attempt})...")
                 file = open(targz_path, 'wb')
-                #pmc.retrbinary('RETR'+ archive_path, file.write)
                 pmc.retrbinary('RETR %s' % archive_path, file.write)
                 file.close()
                 print(f"Saved to {targz_path}")
@@ -294,9 +294,9 @@ def main():
             throttle_request()
             if (args.path):
                 a1 = mapping.get(pmcid)
-                print(pmcid)
+                #print(pmcid)
                 if a1:
-                    print(a1)
+                    #print(a1)
                     archive_path = a1
                 #    archive_path = "ftp://ftp.ncbi.nlm.nih.gov/pub/pmc/".join(a1)
                 else:
