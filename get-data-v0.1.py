@@ -30,8 +30,6 @@ def throttle_request() -> None:
     _last_request_time = time.time()
 
 
-
-
 ## argument parser
 def parse_args():
     parser = argparse.ArgumentParser(description="Download PMC ZIP archives Download PMC OA archives via NCBI FTP or via Europe PMC supplementary files API, using PMCIDs from CSV.")
@@ -44,15 +42,11 @@ def parse_args():
     return parser.parse_args()
 
 
-###################### rest of the workflow for NCBI or EuropePMC API ################################
-def read_pmcids(csv_path: str) -> List[str]:
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return [row.get("PMCID", "").strip() for row in reader if row.get("PMCID", "").strip()]
 
+
+
+###################### workflow for EuropePMC API ################################
 ## read the ftp file with paths (this is default behaviour)
-import csv
-
 def build_column_mapping(file_path, key_col=2, value_col=0, delimiter="\t", has_header=False):
     """
     build a dictionary mapping from one column to another. args:
@@ -78,11 +72,9 @@ def build_column_mapping(file_path, key_col=2, value_col=0, delimiter="\t", has_
     return mapping
 
 
-
-
-
 def europepmc_endpoint(pmcid: str) -> str:
     return f"https://www.ebi.ac.uk/europepmc/webservices/rest/{pmcid}/supplementaryFiles"
+
 
 def _safe_path(base: str, *paths: str) -> str:
     joined = os.path.normpath(os.path.join(base, *paths))
@@ -90,24 +82,6 @@ def _safe_path(base: str, *paths: str) -> str:
         raise ValueError("Unsafe path detected during extraction")
     return joined
 
-'''def _safe_extract_zip(z: zipfile.ZipFile, dest: str, members: Optional[List[str]] = None) -> None:
-    names = members or z.namelist()
-    for name in names:
-        target = _safe_path(dest, name)
-        if name.endswith("/"):
-            os.makedirs(target, exist_ok=True)
-            continue
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        with z.open(name) as src, open(target, "wb") as out:
-            out.write(src.read())
-
-def extract_zip_to_pmc_folder(tmp_path: str, pmcid: str, out_dir: str, only_xml: bool) -> None:
-    pmc_folder = os.path.join(out_dir, pmcid)
-    os.makedirs(pmc_folder, exist_ok=True)
-    with zipfile.ZipFile(tmp_path) as z:
-        names = [n for n in z.namelist() if (not only_xml or n.lower().endswith(".nxml"))]
-        _safe_extract_zip(z, pmc_folder, members=names)
-'''
 def _download_zip(content, pmc_id, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     zip_path = os.path.join(out_dir, f"{pmc_id}.zip")
@@ -187,10 +161,15 @@ def download_from_europepmc(pmcid: str, output_dir: str, only_xml: bool, ignore_
                 os.remove(tmp_path)
             except Exception:
                 pass
+########### europePMC code ends #############################
 
-#----------------------------
-#(Commented) NCBI OA CGI fallback code kept verbatim for future use
-#----------------------------
+
+########### NCBI OA code ####################################
+def read_pmcids(csv_path: str) -> List[str]:
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return [row.get("PMCID", "").strip() for row in reader if row.get("PMCID", "").strip()]
+
 import ftplib
 FTP_HOST = 'ftp.ncbi.nlm.nih.gov'
 
@@ -268,7 +247,6 @@ def _safe_extract_tar(tar, output_dir, members=None):
 
 def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_errors):
     import io as _io
-    import ftplib as _ftplib
     import tarfile
     global pmc
     print(pmcid)
@@ -281,7 +259,6 @@ def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_e
     '''
     targz_path = os.path.join(output_dir, '{0}.tar.gz'.format(pmcid))
     print(archive_path)
-    #targz_path = output_dir / f"{pmcid}.tar.gz"
     for attempt in range(1, 6):
             try:
                 print(f"Downloading {archive_path} (attempt {attempt})...")
@@ -289,12 +266,6 @@ def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_e
                 #pmc.retrbinary('RETR'+ archive_path, file.write)
                 pmc.retrbinary('RETR %s' % archive_path, file.write)
                 file.close()
-                #resp = requests.get(url, stream=True, timeout=60)
-                #resp.raise_for_status()
-                #with open(targz_path, "wb") as f:
-                #    for chunk in resp.iter_content(chunk_size=8192):
-                #        if chunk:
-                #            f.write(chunk)
                 print(f"Saved to {targz_path}")
                 return True
             except Exception as e:
@@ -304,29 +275,7 @@ def download_and_extract_ftp(pmcid, archive_path, output_dir, only_xml, ignore_e
                     return
                 time.sleep(10)
 
-            '''
-            with _ftplib.FTP(FTP_HOST, timeout=60) as ftp:
-                ftp.login()
-                ftp.cwd('/pub/pmc')
-                with _io.BytesIO() as buf:
-                    print(f"Downloading {archive_path} (attempt {attempt})...")
-                    throttle_request()
-                    ftp.retrbinary(f"RETR {archive_path}", buf.write)
-                    buf.seek(0)
-                    with tarfile.open(fileobj=buf, mode="r:gz") as tar:
-                        tar.extractall(path=output_dir, members=files_to_extract(tar, pmcid, only_xml))
-                        members = []
-                        #for m in tar.getmembers():
-                            if only_xml and not m.name.lower().endswith('.nxml'):
-                                continue
-                            parts = m.name.split('/')
-                            parts[0] = pmcid
-                            m.name = '/'.join(parts)
-                            members.append(m)
-                        _safe_extract_tar(tar, output_dir, members)         
-            print(f"Extracted to {pmc_folder}")
-            return
-            '''
+########### NCBI OA code ends ####################################
 
 
 def main():
