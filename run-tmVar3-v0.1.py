@@ -48,7 +48,7 @@ def throttle_request() -> None:
 
 
 def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool) -> None:
-    pmc_folder = os.path.join(output_dir, f"{pmcid}.bioC")
+    pmc_folder = os.path.join(output_dir, f"{pmcid}.xml")
     if os.path.exists(pmc_folder):
         print(f"{pmcid}: already exists")
         return
