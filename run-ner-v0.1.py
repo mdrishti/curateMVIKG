@@ -19,6 +19,9 @@ def parse_args():
     parser.add_argument("-o", "--output", required=True, help="Directory to save extracted files")
     parser.add_argument("--ignore-errors", action="store_true", help="Continue on errors")
     parser.add_argument("--tool", choices=["tmVar3", "bionext"], default="tmVar3", help="Annotation tool to use")
+    parser.add_argument("--pipenv-dir", default=".", help="Path to the Pipenv project for bionext")
+    parser.add_argument("--bionext-path", default=".", help="Path to the bionext main")
+
     return parser.parse_args()
 
 # common (specify PMCID or PID)
@@ -69,14 +72,22 @@ def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool) -> No
         if not ignore_errors:
             raise
 
-def run_bionext(pmcid: str, output_dir: str, ignore_errors: bool) -> None:
+def run_bionext(pmcid: str, output_dir: str, ignore_errors: bool, pipenv_dir: str, bionextPath: str) -> None:
+    #print(bionextPath)
     pmc_file = os.path.join(output_dir, f"{pmcid}.txt")
+    bionextTag = os.path.join(output_dir, "tagger")
+    bionextExt = os.path.join(output_dir, "extractor")
+    bionextLink = os.path.join(output_dir, "linker")
+    os.makedirs(bionextTag, exist_ok=True)
+    os.makedirs(bionextExt, exist_ok=True)
+    os.makedirs(bionextLink, exist_ok=True)
     if os.path.exists(pmc_file):
         print(f"{pmcid}: already exists")
         return
-    cmd = [sys.executable, "/Users/dtandon/Documents/Work/ebi/gitReposO/BioNExt/main.py", f"PMID:{pmcid}"]
+    cmd = ["pipenv", "run", "python", bionextPath, f"PMID:{pmcid}","--tagger.output_folder", bionextTag, "--linker.output_folder", bionextLink, "--extractor.output_folder", bionextExt]
+    #print(cmd)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, cwd=pipenv_dir, capture_output=True, text=True, timeout=10000)
         result.check_returncode()
         with open(pmc_file, "w", encoding="utf-8") as f:
             f.write(result.stdout)
@@ -94,12 +105,12 @@ if __name__ == "__main__":
     os.makedirs(args.output, exist_ok=True)
     for pmc in pmcids:
         print(f"Processing {pmc} with {args.tool}")
-        print(pmc)
+        #print(pmc)
         if args.tool == "tmVar3":
             #throttle_request()
             download_from_tmVar3(pmc, args.output, args.ignore_errors)
         else:
-            run_bionext(pmc, args.output, args.ignore_errors)
+            run_bionext(pmc, args.output, args.ignore_errors, args.pipenv_dir, args.bionext_path)
 
 
 
