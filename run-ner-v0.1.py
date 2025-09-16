@@ -5,12 +5,20 @@ import argparse
 import time
 import requests
 import subprocess
+import logging
 from pathlib import Path
 from typing import Optional, List
 
 REQUEST_DELAY = 0.34  # ~3 requests/sec
 _last_request_time = 0.0
 USER_AGENT = {"User-Agent": "pmc-downloader/1.0 (+https://example.org)"}
+
+
+# for logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
 
 ## argument parser
 def parse_args():
@@ -55,7 +63,7 @@ def throttle_request() -> None:
 def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool) -> None:
     pmc_folder = os.path.join(output_dir, f"{pmcid}.xml")
     if os.path.exists(pmc_folder):
-        print(f"{pmcid}: already exists")
+        logger.info(f"{pmcid}: already exists")
         return
     url = tmVar3_endpoint(pmcid)
     try:
@@ -68,7 +76,7 @@ def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool) -> No
                 if chunk:
                     f2.write(chunk)
     except Exception as e:
-        print(f"{pmcid}: error - {e}")
+        logger.error(f"{pmcid}: error - {e}")
         if not ignore_errors:
             raise
 
@@ -82,7 +90,7 @@ def run_bionext(pmcid: str, output_dir: str, ignore_errors: bool, pipenv_dir: st
     os.makedirs(bionextExt, exist_ok=True)
     os.makedirs(bionextLink, exist_ok=True)
     if os.path.exists(pmc_file):
-        print(f"{pmcid}: already exists")
+        logger.info(f"{pmcid}: already exists")
         return
     cmd = ["pipenv", "run", "python", bionextPath, f"PMID:{pmcid}","--tagger.output_folder", bionextTag, "--linker.output_folder", bionextLink, "--extractor.output_folder", bionextExt]
     #print(cmd)
@@ -92,7 +100,7 @@ def run_bionext(pmcid: str, output_dir: str, ignore_errors: bool, pipenv_dir: st
         with open(pmc_file, "w", encoding="utf-8") as f:
             f.write(result.stdout)
     except Exception as e:
-        print(f"{pmcid}: error - {e}")
+        logger.error(f"{pmcid}: error - {e}")
         if not ignore_errors:
             raise
 
@@ -104,7 +112,7 @@ if __name__ == "__main__":
     #print(pmcids)
     os.makedirs(args.output, exist_ok=True)
     for pmc in pmcids:
-        print(f"Processing {pmc} with {args.tool}")
+        logger.info(f"Processing {pmc} with {args.tool}")
         #print(pmc)
         if args.tool == "tmVar3":
             #throttle_request()
