@@ -27,12 +27,12 @@ See also [paddleocr github](https://github.com/PaddlePaddle/PaddleOCR?tab=readme
 To run tmVar3 on a list of PMIDs, run
 
 ```bash
-python run-tmVar3-v0.1.py --tool tmvar3 -i csv-Bacteroid_BetaSearch_20250821.csv -o out_tmVar3 --ignore-errors > logPMC_tmVar3
+python run-ner-v0.1.py --tool tmvar3 -i csv-Bacteroid_BetaSearch_20250821.csv -o <full path of the output directory. eg:out_tmVar3> --ignore-errors 
 ```
 
 To run BioNExt on a list of PMIDs, run
 
 ```bash
-python run-tmVar3-v0.1.py --tool bionext -i csv-Bacteroid_BetaSearch_20250821.csv -o out_bionext --ignore-errors --pipenv-dir <path to pipenv dir> --bionext-path <path to bionext main.py> logPMC_BioNExt
+python run-ner-v0.1.py --tool bionext -i csv-Bacteroid_BetaSearch_20250821.csv -o <full path of the output directory. eg:out_bionext> --ignore-errors --pipenv-dir <full path of the pipenv dir> --bionext-path <path to bionext main.py>
 ```
 
