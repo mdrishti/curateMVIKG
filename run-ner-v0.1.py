@@ -8,6 +8,7 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Optional, List
+from datetime import datetime
 
 REQUEST_DELAY = 0.34  # ~3 requests/sec
 _last_request_time = 0.0
@@ -15,9 +16,19 @@ USER_AGENT = {"User-Agent": "pmc-downloader/1.0 (+https://example.org)"}
 
 
 # for logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
-
+#logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+#logger = logging.getLogger(__name__)
+def setup_logger(log_path: str):
+    logger = logging.getLogger("pmid_downloader")
+    logger.setLevel(logging.INFO)
+    # Clear previous handlers
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
 
 
 ## argument parser
@@ -29,6 +40,8 @@ def parse_args():
     parser.add_argument("--tool", choices=["tmVar3", "bionext"], default="tmVar3", help="Annotation tool to use")
     parser.add_argument("--pipenv-dir", default=".", help="Path to the Pipenv project for bionext")
     parser.add_argument("--bionext-path", default=".", help="Path to the bionext main")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    parser.add_argument("--log-file", default=f"run_{timestamp}.log", help="Logfile for recording logs of all functions")
 
     return parser.parse_args()
 
@@ -60,7 +73,7 @@ def throttle_request() -> None:
     _last_request_time = time.time()
 
 
-def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool) -> None:
+def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool, looger: logging.Logger) -> None:
     pmc_folder = os.path.join(output_dir, f"{pmcid}.xml")
     if os.path.exists(pmc_folder):
         logger.info(f"{pmcid}: already exists")
@@ -80,22 +93,25 @@ def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool) -> No
         if not ignore_errors:
             raise
 
-def run_bionext(pmcid: str, output_dir: str, ignore_errors: bool, pipenv_dir: str, bionextPath: str) -> None:
+def run_bionext(pmcid: str, output_dir: str, ignore_errors: bool, pipenv_dir: str, bionextPath: str, logger: logging.Logger) -> None:
     #print(bionextPath)
     pmc_file = os.path.join(output_dir, f"{pmcid}.txt")
+    if os.path.exists(pmc_file):
+        logger.info(f"{pmcid}: already exists")
+        return
     bionextTag = os.path.join(output_dir, "tagger")
     bionextExt = os.path.join(output_dir, "extractor")
     bionextLink = os.path.join(output_dir, "linker")
     os.makedirs(bionextTag, exist_ok=True)
     os.makedirs(bionextExt, exist_ok=True)
     os.makedirs(bionextLink, exist_ok=True)
-    if os.path.exists(pmc_file):
-        logger.info(f"{pmcid}: already exists")
-        return
+
     cmd = ["pipenv", "run", "python", bionextPath, f"PMID:{pmcid}","--tagger.output_folder", bionextTag, "--linker.output_folder", bionextLink, "--extractor.output_folder", bionextExt]
     #print(cmd)
     try:
-        result = subprocess.run(cmd, cwd=pipenv_dir, capture_output=True, text=True, timeout=10000)
+        #result = subprocess.run(cmd, cwd=pipenv_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, capture_output=True, text=True, timeout=10000)
+        result = subprocess.run(cmd, cwd=pipenv_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10000)
+        logger.info(result.stdout)
         result.check_returncode()
         with open(pmc_file, "w", encoding="utf-8") as f:
             f.write(result.stdout)
@@ -111,14 +127,18 @@ if __name__ == "__main__":
     pmcids = read_pmcids(args.input)
     #print(pmcids)
     os.makedirs(args.output, exist_ok=True)
+    log_path = os.path.join(args.output, args.log_file)
+    logger = setup_logger(log_path)
+
+
     for pmc in pmcids:
         logger.info(f"Processing {pmc} with {args.tool}")
         #print(pmc)
         if args.tool == "tmVar3":
             #throttle_request()
-            download_from_tmVar3(pmc, args.output, args.ignore_errors)
+            download_from_tmVar3(pmc, args.output, args.ignore_errors, logger)
         else:
-            run_bionext(pmc, args.output, args.ignore_errors, args.pipenv_dir, args.bionext_path)
+            run_bionext(pmc, args.output, args.ignore_errors, args.pipenv_dir, args.bionext_path, logger)
 
 
 
