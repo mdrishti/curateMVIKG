@@ -81,7 +81,7 @@ def download_from_tmVar3(pmcid: str, output_dir: str, ignore_errors: bool, looge
     url = tmVar3_endpoint(pmcid)
     try:
         throttle_request()
-        resp = requests.get(url, stream=True, timeout=120, headers=USER_AGENT)
+        resp = requests.get(url, stream=True, timeout=10000, headers=USER_AGENT)
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "")
         with open(pmc_folder, "wb") as f2:
