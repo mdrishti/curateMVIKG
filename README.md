@@ -44,6 +44,6 @@ python extract-mutations.py --file < path to the xml/json file (tmVar3/BioNExt r
 
 e.g.:
 ```bash
-python extract-mutations-tmVar3.py --file out_bionext/tagger/pubmed_10960088.json --format bionext --out out_bionext/tagger/pubmed_10960088.json.txt
+python extract-mutations.py --file out_bionext/tagger/pubmed_10960088.json --format bionext --out out_bionext/tagger/pubmed_10960088.json.txt
 ```
 
