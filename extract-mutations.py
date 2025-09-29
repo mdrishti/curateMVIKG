@@ -18,10 +18,12 @@ def extract_mutations_tmVar3(file_path: str) -> List[Dict]:
 
             for passage in document.passages:
                 for annotation in passage.annotations:
-                    if annotation.infons.get("type") == "DNAMutation":
+                    typeAnnot = annotation.infons.get("type")
+                    if typeAnnot == "DNAMutation" or typeAnnot == "ProteinMutation":
                         for loc in annotation.locations:
                             results.append({
-                                "pmid": pmid,
+                                "type": typeAnnot,
+                                "pmc-id": "PMC" + pmid,
                                 "identifier": annotation.infons.get("identifier"),
                                 "text": annotation.text,
                                 "offset": loc.offset,
@@ -42,9 +44,11 @@ def extract_mutations_bionext(file_path: str) -> List[Dict]:
         pmid = doc.get("id")
         for passage in doc.get("passages", []):
             for ann in passage.get("annotations", []):
-                if ann["infons"].get("type") == "SequenceVariant":
+                typeAnnot = ann["infons"].get("type")
+                if typeAnnot == "SequenceVariant":
                     for loc in ann.get("locations", []):
                         results.append({
+                            "type": typeAnnot,
                             "pmid": pmid,
                             "identifier": ann["infons"].get("identifier", ""),
                             "text": ann.get("text"),
@@ -71,11 +75,11 @@ def save_to_csv(data: List[Dict], out_path: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract DNA mutations from BioC XML.")
     parser.add_argument("--file", required=True, help="Path to BioC XML file")
-    parser.add_argument("--format", required=True, choices=["tmvar", "bionext"],help="Input format: 'tmvar' (DNA mutation) or 'bionext' (SequenceVariant)")
+    parser.add_argument("--format", required=True, choices=["tmVar3", "bionext"],help="Input format: 'tmVar3' (DNA /Protein mutation) or 'bionext' (SequenceVariant)")
     parser.add_argument("--out", help="Optional output CSV file")
 
     args = parser.parse_args()
-    if args.format == "tmvar":
+    if args.format == "tmVar3":
         mutations = extract_mutations_tmVar3(args.file)
     else:
         mutations = extract_mutations_bionext(args.file)
