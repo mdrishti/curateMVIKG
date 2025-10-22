@@ -80,7 +80,7 @@ def compare_mutations(tmvar_df, bionext_df, threshold=60, offset_tolerance=5):
                     continue
             except ValueError:
                 pass'''
-
+            #comparison is only through the fuzz ratio between normalized mutations
             score = fuzz.ratio(t["normalized"], b["normalized"])
             print(t["normalized"] + "\t" + b["normalized"] + "\t" + str(score))
             if score >= threshold:
