@@ -63,6 +63,10 @@ def load_bionext_csv(path: str):
 
 def compare_mutations(tmvar_df, bionext_df, threshold=60, offset_tolerance=5):
     tp, fp, fn = [], [], []
+    tmvar_df = tmvar_df.drop_duplicates(subset=["pmid", "normalized"]).reset_index(drop=True)
+    bionext_df = bionext_df.drop_duplicates(subset=["pmid", "normalized"]).reset_index(drop=True)
+
+    tmvar_records = tmvar_df.to_dict("records")
     tmvar_records = tmvar_df.to_dict("records")
     bionext_records = bionext_df.to_dict("records")
     used_bionext = set()
